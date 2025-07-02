@@ -1,0 +1,27 @@
+# External libraries - ignore build artifacts
+/external libraries/Vulkan/
+/external libraries/**/lib/
+/external libraries/**/bin/
+/external libraries/**/build/
+/external libraries/**/CMakeFiles/
+/external libraries/**/cmake-build-*/
+*.exe
+*.lib
+*.dll
+*.pdb
+
+
+# Binary files
+*.exe
+*.dll
+*.lib
+*.pdb
+*.obj
+
+# IDE-specific
+.vscode/
+.vs/
+*.suo
+*.user
+*.sdf
+*.VC.db
