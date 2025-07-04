@@ -1,10 +1,6 @@
 # External libraries - ignore build artifacts
-/external libraries/Vulkan/
-/external libraries/**/lib/
-/external libraries/**/bin/
-/external libraries/**/build/
-/external libraries/**/CMakeFiles/
-/external libraries/**/cmake-build-*/
+/external_libraries/
+
 *.exe
 *.lib
 *.dll
