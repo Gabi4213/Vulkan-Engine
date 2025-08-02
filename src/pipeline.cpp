@@ -1,5 +1,5 @@
 #include "pipeline.hpp"
-#include "vertex_buffer.hpp"
+#include "buffers.hpp"
 
 #include <fstream>
 #include <stdexcept>

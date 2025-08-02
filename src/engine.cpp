@@ -9,7 +9,7 @@ namespace lavander {
     {
         createPipelineLayout();
         createPipeline();
-        initVertexBuffer();
+        initBuffers();
         createCommandBuffers();
     }
 
@@ -97,8 +97,8 @@ namespace lavander {
 
             pipeline->bind(commandBuffers[i]);
 
-            vertexBuffer->bind(commandBuffers[i]);
-            vertexBuffer->draw(commandBuffers[i]);
+            buffers->bind(commandBuffers[i]);
+            buffers->draw(commandBuffers[i]);
 
             vkCmdEndRenderPass(commandBuffers[i]);
             if (vkEndCommandBuffer(commandBuffers[i]) != VK_SUCCESS)
@@ -109,7 +109,7 @@ namespace lavander {
         }
     }
 
-    void Engine::initVertexBuffer()
+    void Engine::initBuffers()
     {
         std::vector<Vertex> vertices = 
         {
@@ -118,7 +118,12 @@ namespace lavander {
             {{-0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}},
         };
 
-        vertexBuffer = std::make_unique<c_vertex_buffer>(device, vertices);
+        std::vector<uint32_t> indices = 
+        { 
+            0, 1, 2 
+        };
+
+        buffers = std::make_unique<c_buffers>(device, vertices, indices);
     }
 
     void Engine::drawFrame()

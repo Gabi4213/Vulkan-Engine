@@ -43,20 +43,29 @@ namespace lavander
         }
     };
 
-    class c_vertex_buffer 
+    class c_buffers 
     {
     public:
-        c_vertex_buffer(c_device& device, const std::vector<Vertex>& vertices);
-        ~c_vertex_buffer();
+        c_buffers(c_device& device,
+            const std::vector<Vertex>& vertices,
+            const std::vector<uint32_t>& indices = {});
+        ~c_buffers();
 
         void bind(VkCommandBuffer commandBuffer);
         void draw(VkCommandBuffer commandBuffer);
 
     private:
         c_device& deviceRef;
+
         VkBuffer vertexBuffer{};
         VkDeviceMemory vertexBufferMemory{};
         uint32_t vertexCount{};
+
+        VkBuffer indexBuffer{};
+        VkDeviceMemory indexBufferMemory{};
+        uint32_t indexCount{};
+        bool hasIndexBuffer = false;
     };
+
 
 }

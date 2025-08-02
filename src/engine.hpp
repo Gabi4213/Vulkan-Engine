@@ -4,7 +4,7 @@
 #include "pipeline.hpp"
 #include "device.hpp"
 #include "swap_chain.hpp"
-#include "vertex_buffer.hpp"
+#include "buffers.hpp"
 
 #include <memory>
 #include <vector>
@@ -29,7 +29,7 @@ namespace lavander {
         void createPipelineLayout();
         void createPipeline();
         void createCommandBuffers();
-        void initVertexBuffer();
+        void initBuffers();
         void drawFrame();
 
         c_window window{WIDTH, HEIGHT, "Engine"};
@@ -39,7 +39,7 @@ namespace lavander {
         VkPipelineLayout pipelineLayout;
         std::vector<VkCommandBuffer> commandBuffers;
 
-        std::unique_ptr<c_vertex_buffer> vertexBuffer;
+        std::unique_ptr<c_buffers> buffers;
 
     };
 }
