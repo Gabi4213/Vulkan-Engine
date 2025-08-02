@@ -53,15 +53,6 @@ target_link_libraries(VulkanEngine PRIVATE
 # mark shader as resource
 source_group("Shaders" FILES ${SHADER_FILES})
 
-#custom command to run compile.bat
-add_custom_command(
-    OUTPUT shaders_compiled_marker
-    COMMAND ${CMAKE_COMMAND} -E echo "Compiling shaders..."
-    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders compile.bat
-    COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_CURRENT_BINARY_DIR}/shaders_compiled_marker
-    COMMENT "Running shader compiler script"
-)
-
 add_custom_target(CompileShaders ALL DEPENDS shaders_compiled_marker)
 
 add_dependencies(VulkanEngine CompileShaders)

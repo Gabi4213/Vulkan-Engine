@@ -1,28 +1,22 @@
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
+#include "engine.hpp"
 
-#define GLM_FORCE_RADIANS
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#include <glm/vec4.hpp>
-#include <glm/mat4x4.hpp>
-
+#include <cstdlib>
 #include <iostream>
+#include <stdexcept>
 
-#include "renderer.h"
-
-int main() 
+int main()
 {
-	renderer application;
+    lavander::Engine engine{};
 
-	try 
-	{
-		application.run();
-	}
-	catch ( const std::exception& e) 
-	{
-		std::cerr << e.what() << std::endl;
-		return EXIT_FAILURE;
-	}
+    try 
+    {
+        engine.run();
+    } 
+    catch (const std::exception &e) 
+    {
+        std::cerr << e.what() << '\n';
+        return EXIT_FAILURE;
+    }
 
-	return EXIT_SUCCESS;
+    return EXIT_SUCCESS;
 }
