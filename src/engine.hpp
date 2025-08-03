@@ -9,6 +9,10 @@
 #include <memory>
 #include <vector>
 
+#include <glm/gtc/matrix_transform.hpp>
+#include <chrono>
+
+
 namespace lavander {
 
     class Engine 
@@ -31,6 +35,11 @@ namespace lavander {
         void createCommandBuffers();
         void initBuffers();
         void drawFrame();
+        void createDescriptorSetLayout();
+        void createUniformBuffers();
+        void createDescriptorPool();
+        void createDescriptorSets(VkDescriptorSetLayout descriptorSetLayout);
+        void updateUniformBuffer(uint32_t currentImage);
 
         c_window window{WIDTH, HEIGHT, "Engine"};
         c_device device{window};
@@ -40,6 +49,15 @@ namespace lavander {
         std::vector<VkCommandBuffer> commandBuffers;
 
         std::unique_ptr<c_buffers> buffers;
+
+
+        VkDescriptorSetLayout descriptorSetLayout;
+
+        VkDescriptorPool descriptorPool;
+        std::vector<VkDescriptorSet> descriptorSets;
+
+        std::vector<VkBuffer> uniformBuffers;
+        std::vector<VkDeviceMemory> uniformBuffersMemory;
 
     };
 }

@@ -22,6 +22,7 @@ namespace lavander {
         VkPipelineLayout pipelineLayout = nullptr;
         VkRenderPass renderPass = nullptr;
         uint32_t subpass = 0;
+        VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
     };
 
     class c_pipeline {

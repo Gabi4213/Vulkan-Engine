@@ -43,6 +43,14 @@ namespace lavander
         }
     };
 
+    struct UniformBufferObject 
+    {
+        glm::mat4 model;
+        glm::mat4 view;
+        glm::mat4 proj;
+    };
+
+
     class c_buffers 
     {
     public:
