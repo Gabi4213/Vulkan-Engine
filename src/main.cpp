@@ -11,10 +11,19 @@ int main()
 
     try 
     {
-        auto& registry = engine.getRegistry();
+        auto& reg = engine.getRegistry();
+        auto e = reg.createEntity();
+        auto e2 = reg.createEntity();
 
-        Entity e1 = registry.createEntity();
-        registry.addComponent<Transform>(e1, { glm::vec3(1.0f, 2.0f, 3.0f) });
+        reg.addComponent<Transform>(e, 
+            {
+                glm::vec3(0.0f,0.0f,0.0f),
+                glm::vec3(0.0f, glm::radians(0.0f), 0.0f),
+                glm::vec3(0.5f, 0.5f, 0.5f)
+            
+            });
+
+        reg.addComponent<SpriteRenderer>(e, { glm::vec3(1.0f, 0.0f, 0.0f) });
 
         engine.run();
 

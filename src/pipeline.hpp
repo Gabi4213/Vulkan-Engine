@@ -50,6 +50,7 @@ namespace lavander {
 
         void createShaderModule(const std::vector<char>& code, VkShaderModule* shaderModule);
 
+
         // implicitly will outlive any class that depends on it. "aggregation"
         c_device& device;
         VkPipeline graphicsPipeline;

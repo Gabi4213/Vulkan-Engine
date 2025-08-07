@@ -6,6 +6,7 @@
 #include "swap_chain.hpp"
 #include "buffers.hpp"
 #include "ecs_registry.hpp"
+#include "renderer_2d.hpp"
 
 #include <memory>
 #include <vector>
@@ -44,6 +45,9 @@ namespace lavander {
         void createDescriptorSets(VkDescriptorSetLayout descriptorSetLayout);
         void updateUniformBuffer(uint32_t currentImage);
 
+        void allocateCommandBuffers();
+        void recordCommandBuffer(int imageIndex);
+
         c_window window{WIDTH, HEIGHT, "Engine"};
         c_device device{window};
         c_swapchain swapChain{device, window.getExtent()};
@@ -63,6 +67,7 @@ namespace lavander {
         std::vector<VkDeviceMemory> uniformBuffersMemory;
 
         ECSRegistry registry;
+        std::unique_ptr<Renderer2D> renderer2D;
 
     };
 }

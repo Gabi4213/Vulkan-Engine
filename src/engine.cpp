@@ -1,4 +1,5 @@
 #include "engine.hpp"
+#include "components.hpp"
 
 #include <stdexcept>
 #include <array>
@@ -13,8 +14,18 @@ namespace lavander {
         createDescriptorSets(descriptorSetLayout);
         createPipelineLayout();
         createPipeline();
+
+        renderer2D = std::make_unique<Renderer2D>(
+            device,
+            swapChain.getRenderPass(),
+            swapChain.getSwapChainExtent(),
+            pipelineLayout
+        );
+
+
         initBuffers();
-        createCommandBuffers();
+        allocateCommandBuffers();
+       //createCommandBuffers();
     }
 
     Engine::~Engine()
@@ -34,14 +45,24 @@ namespace lavander {
 
     void Engine::createPipelineLayout()
     {
+        // descriptor set layout already created...
+        VkPushConstantRange pushRange{};
+        pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        pushRange.offset = 0;
+        pushRange.size = sizeof(PushConst);
+
         VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         pipelineLayoutInfo.setLayoutCount = 1;
         pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
-        pipelineLayoutInfo.pushConstantRangeCount = 0;
-        pipelineLayoutInfo.pPushConstantRanges = nullptr;
+        pipelineLayoutInfo.pushConstantRangeCount = 1;
+        pipelineLayoutInfo.pPushConstantRanges = &pushRange;
 
-        if (vkCreatePipelineLayout(device.device(), &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS)
+        if (vkCreatePipelineLayout(
+            device.device(),
+            &pipelineLayoutInfo,
+            nullptr,
+            &pipelineLayout) != VK_SUCCESS)
         {
             throw std::runtime_error("failed to create pipeline layout!");
         }
@@ -105,8 +126,10 @@ namespace lavander {
 
             vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[i], 0, nullptr);
 
-            buffers->bind(commandBuffers[i]);
-            buffers->draw(commandBuffers[i]);
+            //buffers->bind(commandBuffers[i]);
+            //buffers->draw(commandBuffers[i]);
+
+            renderer2D->draw(commandBuffers[i], registry);
 
             vkCmdEndRenderPass(commandBuffers[i]);
             if (vkEndCommandBuffer(commandBuffers[i]) != VK_SUCCESS)
@@ -144,7 +167,8 @@ namespace lavander {
             throw std::runtime_error("imageIndex failed to acquire swap chain image!");
         }
 
-        updateUniformBuffer(imageIndex);
+       // updateUniformBuffer(imageIndex);
+        recordCommandBuffer(imageIndex);
 
         result = swapChain.submitCommandBuffers(&commandBuffers[imageIndex], &imageIndex);
         if (result != VK_SUCCESS)
@@ -269,4 +293,58 @@ namespace lavander {
         memcpy(data, &ubo, sizeof(ubo));
         vkUnmapMemory(device.device(), uniformBuffersMemory[currentImage]);
     }
+
+    void Engine::allocateCommandBuffers() 
+    {
+        commandBuffers.resize(swapChain.imageCount());
+
+        VkCommandBufferAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocInfo.commandPool = device.getCommandPool();
+        allocInfo.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
+
+        if (vkAllocateCommandBuffers(device.device(), &allocInfo, commandBuffers.data()) != VK_SUCCESS) {
+            throw std::runtime_error("failed to allocate command buffers!");
+        }
+    }
+
+    void Engine::recordCommandBuffer(int idx) {
+        auto cmd = commandBuffers[idx];
+
+        // reset & begin
+        vkResetCommandBuffer(cmd, 0);
+        VkCommandBufferBeginInfo beginInfo{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+        vkBeginCommandBuffer(cmd, &beginInfo);
+
+        // begin render pass
+        VkRenderPassBeginInfo rpInfo{ VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
+        rpInfo.renderPass = swapChain.getRenderPass();
+        rpInfo.framebuffer = swapChain.getFrameBuffer(idx);
+        rpInfo.renderArea = { {0,0}, swapChain.getSwapChainExtent() };
+        std::array<VkClearValue, 2> clears{};
+        clears[0].color = { 0.2f,0.5f,0.9f,1.0f };
+        clears[1].depthStencil = { 1.0f,0 };
+        rpInfo.clearValueCount = (uint32_t)clears.size();
+        rpInfo.pClearValues = clears.data();
+        vkCmdBeginRenderPass(cmd, &rpInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+        // bind the *default* pipeline for UBO (if you still need it)
+        pipeline->bind(cmd);
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+            pipelineLayout, 0, 1,
+            descriptorSets.data() + idx, 0, nullptr);
+
+        // now draw your ECS quads
+        renderer2D->draw(cmd, registry);
+
+        // end
+        vkCmdEndRenderPass(cmd);
+        if (vkEndCommandBuffer(cmd) != VK_SUCCESS) {
+            throw std::runtime_error("failed to record command buffer!");
+        }
+    }
+
+
+
 }
