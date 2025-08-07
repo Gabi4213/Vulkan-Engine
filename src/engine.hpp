@@ -5,6 +5,7 @@
 #include "device.hpp"
 #include "swap_chain.hpp"
 #include "buffers.hpp"
+#include "ecs_registry.hpp"
 
 #include <memory>
 #include <vector>
@@ -28,6 +29,8 @@ namespace lavander {
         Engine&operator=(const Engine&) = delete;
         
         void run();
+
+        ECSRegistry& getRegistry() { return registry; }
 
         private:
         void createPipelineLayout();
@@ -58,6 +61,8 @@ namespace lavander {
 
         std::vector<VkBuffer> uniformBuffers;
         std::vector<VkDeviceMemory> uniformBuffersMemory;
+
+        ECSRegistry registry;
 
     };
 }
