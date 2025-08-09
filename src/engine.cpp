@@ -9,18 +9,37 @@ namespace lavander {
     Engine::Engine()
     {
         createDescriptorSetLayout();
+        createMaterialSetLayout();
         createUniformBuffers();
         createDescriptorPool();
         createDescriptorSets(descriptorSetLayout);
+        createMaterialDescriptorPool();
+        createMaterialSetLayout();
+
+
         createPipelineLayout();
         createPipeline();
 
         renderer2D = std::make_unique<Renderer2D>(
-            device,
-            swapChain.getRenderPass(),
-            swapChain.getSwapChainExtent(),
-            pipelineLayout
+            device, swapChain.getRenderPass(), swapChain.getSwapChainExtent(),
+            pipelineLayout, materialSetLayout, materialPool
         );
+
+
+        sceneGraph.SetTextureLoader(
+            [this](const std::string& path) -> std::shared_ptr<Texture2D> {
+                auto tex = std::make_shared<Texture2D>(device, path);
+                // allocate (or ensure) a descriptor set for this texture so Renderer2D can bind set=1 safely
+                // If you added a caching getter, prefer that:
+                // tex->getOrCreateDescriptor(materialPool, materialSetLayout);
+                tex->allocateDescriptor(materialPool, materialSetLayout); // if you don't have caching yet
+                return tex;
+            },
+            "../../src/assets" // root; change if your assets folder path differs
+        );
+
+
+        lavander::RegisterBuiltInComponents();
 
         createImGuiDescriptorPool();
 
@@ -33,8 +52,10 @@ namespace lavander {
     Engine::~Engine()
     {
         shutdownImGui();
-        vkDestroyPipelineLayout(device.device(), pipelineLayout, nullptr);
-        vkDestroyDescriptorSetLayout(device.device(), descriptorSetLayout, nullptr);
+        if (materialPool) vkDestroyDescriptorPool(device.device(), materialPool, nullptr);
+        if (materialSetLayout) vkDestroyDescriptorSetLayout(device.device(), materialSetLayout, nullptr);
+        if (descriptorSetLayout) vkDestroyDescriptorSetLayout(device.device(), descriptorSetLayout, nullptr);
+        if (pipelineLayout) vkDestroyPipelineLayout(device.device(), pipelineLayout, nullptr);
     }
 
     void Engine::run()
@@ -48,26 +69,22 @@ namespace lavander {
 
     void Engine::createPipelineLayout()
     {
-        // descriptor set layout already created...
-        VkPushConstantRange pushRange{};
-        pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-        pushRange.offset = 0;
-        pushRange.size = sizeof(PushConst);
+        VkPushConstantRange push{};
+        push.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+        push.offset = 0;
+        push.size = sizeof(PushConst);
 
-        VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-        pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pipelineLayoutInfo.setLayoutCount = 1;
-        pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
-        pipelineLayoutInfo.pushConstantRangeCount = 1;
-        pipelineLayoutInfo.pPushConstantRanges = &pushRange;
+        VkDescriptorSetLayout setLayouts[2] = { descriptorSetLayout, materialSetLayout };
 
-        if (vkCreatePipelineLayout(
-            device.device(),
-            &pipelineLayoutInfo,
-            nullptr,
-            &pipelineLayout) != VK_SUCCESS)
+        VkPipelineLayoutCreateInfo ci{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+        ci.setLayoutCount = 2;
+        ci.pSetLayouts = setLayouts;
+        ci.pushConstantRangeCount = 1;
+        ci.pPushConstantRanges = &push;
+
+        if (vkCreatePipelineLayout(device.device(), &ci, nullptr, &pipelineLayout) != VK_SUCCESS)
         {
-            throw std::runtime_error("failed to create pipeline layout!");
+            throw std::runtime_error("failed to create pipeline layout");
         }
     }
 
@@ -182,7 +199,7 @@ namespace lavander {
         ImGui::Render(); // finalize ImGui draw data for this frame
 
 
-       // updateUniformBuffer(imageIndex);
+        updateUniformBuffer(imageIndex);
         recordCommandBuffer(imageIndex);
 
         result = swapChain.submitCommandBuffers(&commandBuffers[imageIndex], &imageIndex);
@@ -280,30 +297,23 @@ namespace lavander {
         }
 
     }
+
     void Engine::updateUniformBuffer(uint32_t currentImage)
     {
-        static auto startTime = std::chrono::high_resolution_clock::now();
-        auto currentTime = std::chrono::high_resolution_clock::now();
-        float time = std::chrono::duration<float, std::chrono::seconds::period>(
-            currentTime - startTime)
-            .count();
-
         UniformBufferObject ubo{};
-        ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f),
-            glm::vec3(0.0f, 0.0f, 1.0f));
-        ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f),
-            glm::vec3(0.0f, 0.0f, 0.0f),
-            glm::vec3(0.0f, 0.0f, 1.0f));
-        ubo.proj = glm::perspective(glm::radians(45.0f),
-            swapChain.getSwapChainExtent().width /
-            (float)swapChain.getSwapChainExtent().height,
-            0.1f, 10.0f);
-        ubo.proj[1][1] *= -1; // Vulkan flips Y
+        ubo.model = glm::mat4(1.0f);
+        ubo.view = glm::mat4(1.0f);
 
-        void* data;
-        vkMapMemory(device.device(), uniformBuffersMemory[currentImage], 0,
-            sizeof(ubo), 0, &data);
-        memcpy(data, &ubo, sizeof(ubo));
+        float w = static_cast<float>(swapChain.getSwapChainExtent().width);
+        float h = static_cast<float>(swapChain.getSwapChainExtent().height);
+        float aspect = w / h;
+
+        ubo.proj = glm::ortho(-aspect, aspect, -1.0f, 1.0f);
+        ubo.proj[1][1] *= -1.0f;
+
+        void* data = nullptr;
+        vkMapMemory(device.device(), uniformBuffersMemory[currentImage], 0, sizeof(ubo), 0, &data);
+        std::memcpy(data, &ubo, sizeof(ubo));
         vkUnmapMemory(device.device(), uniformBuffersMemory[currentImage]);
     }
 
@@ -360,6 +370,37 @@ namespace lavander {
             throw std::runtime_error("failed to record command buffer!");
         }
     }
+
+    void Engine::createMaterialSetLayout()
+    {
+        VkDescriptorSetLayoutBinding sampler{};
+        sampler.binding = 0;
+        sampler.descriptorCount = 1;
+        sampler.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        sampler.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+        VkDescriptorSetLayoutCreateInfo info{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+        info.bindingCount = 1;
+        info.pBindings = &sampler;
+        if (vkCreateDescriptorSetLayout(device.device(), &info, nullptr, &materialSetLayout) != VK_SUCCESS)
+            throw std::runtime_error("failed to create material set layout");
+    }
+
+    void Engine::createMaterialDescriptorPool(uint32_t maxSets)
+    {
+        VkDescriptorPoolSize size{};
+        size.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        size.descriptorCount = maxSets;
+
+        VkDescriptorPoolCreateInfo ci{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
+        ci.poolSizeCount = 1;
+        ci.pPoolSizes = &size;
+        ci.maxSets = maxSets;
+
+        if (vkCreateDescriptorPool(device.device(), &ci, nullptr, &materialPool) != VK_SUCCESS)
+            throw std::runtime_error("failed to create material descriptor pool");
+    }
+
     void Engine::createImGuiDescriptorPool()
     {
         //general purpose pool for imgui

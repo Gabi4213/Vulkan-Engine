@@ -1,10 +1,30 @@
 #include "scene_graph.hpp"
+#include "component_type_db.hpp"
 #include <algorithm>
 #include <cstring> 
 #include <imgui.h>
 
 namespace lavander
 {
+
+    template<typename... Ts>
+    static void RemoveAllKnown(lavander::ECSRegistry& reg, Entity e)
+    {
+        (reg.removeAllComponents<Ts>(e), ...);
+    }
+
+
+    void SceneGraph::SetTextureLoader(TextureLoader loader, const std::string& assetRoot)
+    {
+        m_LoadTexture = std::move(loader);
+        m_AssetRoot = std::filesystem::path(assetRoot);
+        if (!std::filesystem::exists(m_AssetRoot)) {
+            std::error_code ec;
+            std::filesystem::create_directories(m_AssetRoot, ec);
+        }
+        m_BrowseDir = m_AssetRoot;
+    }
+
     std::string SceneGraph::MakeEntityLabel(Entity e)
     {
         std::string label = "Entity " + std::to_string(e);
@@ -18,14 +38,73 @@ namespace lavander
         return label;
     }
 
+    void SceneGraph::DrawTexturePicker(SpriteRenderer& sr, const char* popupId)
+    {
+        // Open the popup externally with ImGui::OpenPopup(popupId)
+        if (ImGui::BeginPopup(popupId)) {
+            ImGui::TextUnformatted("Pick a texture from assets/");
+            ImGui::Separator();
+
+            // Path & nav
+            ImGui::Text("Path: %s", m_BrowseDir.string().c_str());
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Up")) {
+                if (m_BrowseDir != m_AssetRoot) {
+                    m_BrowseDir = m_BrowseDir.parent_path();
+                }
+            }
+
+            // Filter extensions we’ll show
+            static const char* exts[] = { ".png", ".jpg", ".jpeg", ".bmp", ".tga", ".gif", ".hdr", ".dds" };
+
+            // List directories & files
+            ImGui::BeginChild("##assets_list", ImVec2(0, 300), true);
+
+            // 1) directories first
+            for (auto& entry : std::filesystem::directory_iterator(m_BrowseDir)) {
+                if (!entry.is_directory()) continue;
+                std::string name = entry.path().filename().string();
+                if (ImGui::Selectable((name + "/").c_str(), false)) {
+                    m_BrowseDir = entry.path();
+                }
+            }
+
+            // 2) files next
+            for (auto& entry : std::filesystem::directory_iterator(m_BrowseDir)) {
+                if (!entry.is_regular_file()) continue;
+                std::string ext = entry.path().extension().string();
+                std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                bool ok = false;
+                for (auto* e : exts) if (ext == e) { ok = true; break; }
+                if (!ok) continue;
+
+                std::string name = entry.path().filename().string();
+                if (ImGui::Selectable(name.c_str(), false)) {
+                    if (m_LoadTexture) {
+                        auto tex = m_LoadTexture(entry.path().string());
+                        if (tex) sr.texture = std::move(tex);
+                    }
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+            ImGui::EndChild();
+
+            if (ImGui::Button("Close")) ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+        }
+    }
+
     void SceneGraph::OnImGuiRender()
     {
+        // -------------------
+        // Scene Hierarchy
+        // -------------------
         ImGui::Begin("Scene");
 
-        // right click to add new entity
+        // Right-click empty space -> create entity
         if (ImGui::BeginPopupContextWindow(nullptr, ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
         {
-            if (ImGui::MenuItem("Create Empty Entity")) 
+            if (ImGui::MenuItem("Create Empty Entity"))
             {
                 Entity e = m_Registry->createEntity();
                 m_Registry->addComponent<Tag>(e, Tag{ "Empty" });
@@ -40,7 +119,10 @@ namespace lavander
         {
             Entity e = all[i];
 
-            ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_Leaf;
+            ImGuiTreeNodeFlags flags =
+                ImGuiTreeNodeFlags_OpenOnArrow |
+                ImGuiTreeNodeFlags_SpanAvailWidth |
+                ImGuiTreeNodeFlags_Leaf;
 
             if (m_Selected == e) flags |= ImGuiTreeNodeFlags_Selected;
 
@@ -49,33 +131,31 @@ namespace lavander
 
             if (ImGui::IsItemClicked()) m_Selected = e;
 
+            // Per-entity context menu
             if (ImGui::BeginPopupContextItem())
             {
                 if (ImGui::MenuItem("Delete"))
                 {
+                    RemoveAllKnown<Transform, SpriteRenderer, Tag>(*m_Registry, e);
                     m_Registry->destroyEntity(e);
-                    if (m_Selected == e) 
-                    {
-                        m_Selected = 0;
-                    }
 
+                    m_Registry->destroyEntity(e);
+                    if (m_Selected == e) m_Selected = 0;
                     ImGui::EndPopup();
-
-                    if (opened) 
-                    { 
-                        ImGui::TreePop();
-                    }
-
-                    //entity removed
-                    continue;
+                    if (opened) ImGui::TreePop();
+                    continue; // entity was removed
                 }
+
                 if (ImGui::BeginMenu("Add Component"))
                 {
-                    if (ImGui::MenuItem("Transform"))      m_Registry->addComponent<Transform>(e, Transform{});
-                    if (ImGui::MenuItem("SpriteRenderer")) m_Registry->addComponent<SpriteRenderer>(e, SpriteRenderer{});
-                    if (ImGui::MenuItem("Tag"))            m_Registry->addComponent<Tag>(e, Tag{ "New Tag" });
+                    for (const auto& info : ComponentTypeDB::Get().types())
+                    {
+                        if (ImGui::MenuItem(info.name.c_str()))
+                            info.addDefault(*m_Registry, e);
+                    }
                     ImGui::EndMenu();
                 }
+
                 ImGui::EndPopup();
             }
 
@@ -84,15 +164,44 @@ namespace lavander
 
         ImGui::End();
 
-        //Properties
+        // -------------------
+        // Properties
+        // -------------------
         ImGui::Begin("Properties");
-        if (m_Selected != 0) 
+
+        if (m_Selected != 0)
         {
             ImGui::Text("Entity: %u", m_Selected);
 
-            //tag
-            std::vector<Tag>* tags = m_Registry->getComponents<Tag>(m_Selected);
-            if (tags && !tags->empty()) 
+            // Add Component popup trigger
+            if (ImGui::Button("+ Add Component"))
+                ImGui::OpenPopup("add_component_popup");
+
+            if (ImGui::BeginPopup("add_component_popup"))
+            {
+                static char filter[64] = { 0 };
+                ImGui::InputTextWithHint("##compfilter", "Search...", filter, sizeof(filter));
+
+                std::string filtLower = filter;
+                std::transform(filtLower.begin(), filtLower.end(), filtLower.begin(), ::tolower);
+
+                for (const auto& info : ComponentTypeDB::Get().types())
+                {
+                    if (filter[0] != '\0')
+                    {
+                        std::string nameLower = info.name;
+                        std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::tolower);
+                        if (nameLower.find(filtLower) == std::string::npos) continue;
+                    }
+
+                    if (ImGui::MenuItem(info.name.c_str()))
+                        info.addDefault(*m_Registry, m_Selected);
+                }
+                ImGui::EndPopup();
+            }
+
+            // --- Tag (edit first tag only) ---
+            if (auto* tags = m_Registry->getComponents<Tag>(m_Selected); tags && !tags->empty())
             {
                 std::string& name = (*tags)[0].name;
                 char buf[128];
@@ -100,39 +209,86 @@ namespace lavander
                 buf[sizeof(buf) - 1] = '\0';
 
                 if (ImGui::InputText("Tag", buf, sizeof(buf)))
-                {
                     name = buf;
+
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Remove Tag"))
+                {
+                    m_Registry->removeComponentAt<Tag>(m_Selected, 0);
                 }
             }
 
-            //transform
-            std::vector<Transform>* trs = m_Registry->getComponents<Transform>(m_Selected);
-            if (trs)
+            // --- Transform(s) ---
+            if (auto* trs = m_Registry->getComponents<Transform>(m_Selected))
             {
-                for (size_t ti = 0; ti < trs->size(); ++ti)
+                for (int ti = static_cast<int>(trs->size()) - 1; ti >= 0; --ti)
                 {
-                    Transform& t = (*trs)[ti];
+                    // refresh pointer after potential removals
+                    trs = m_Registry->getComponents<Transform>(m_Selected);
+                    if (!trs || ti >= static_cast<int>(trs->size())) continue;
+
+                    ImGui::PushID(ti);
                     std::string hdr = "Transform " + std::to_string(ti);
                     ImGui::SeparatorText(hdr.c_str());
+
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton("Remove"))
+                    {
+                        m_Registry->removeComponentAt<Transform>(m_Selected, static_cast<size_t>(ti));
+                        ImGui::PopID();
+                        continue;
+                    }
+
+                    Transform& t = (*trs)[ti];
                     ImGui::DragFloat3("Position", &t.position.x, 0.05f);
                     ImGui::DragFloat3("Rotation (rad)", &t.rotation.x, 0.05f);
                     ImGui::DragFloat3("Scale", &t.scale.x, 0.05f, 0.01f, 100.0f);
+                    ImGui::PopID();
                 }
             }
 
-            //sprite renderer
-            std::vector<SpriteRenderer>* srs = m_Registry->getComponents<SpriteRenderer>(m_Selected);
-            if (srs)
-            {
-                for (size_t si = 0; si < srs->size(); ++si)
-                {
-                    SpriteRenderer& sr = (*srs)[si];
+            // --- SpriteRenderer(s) ---
+            if (auto* srs = m_Registry->getComponents<SpriteRenderer>(m_Selected)) {
+                for (int si = int(srs->size()) - 1; si >= 0; --si) {
+                    srs = m_Registry->getComponents<SpriteRenderer>(m_Selected);
+                    if (!srs || si >= int(srs->size())) continue;
+
+                    ImGui::PushID(10000 + si);
                     std::string hdr = "SpriteRenderer " + std::to_string(si);
                     ImGui::SeparatorText(hdr.c_str());
+
+                    // Remove button
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton("Remove")) {
+                        m_Registry->removeComponentAt<SpriteRenderer>(m_Selected, size_t(si));
+                        ImGui::PopID();
+                        continue;
+                    }
+
+                    SpriteRenderer& sr = (*srs)[si];
+
                     ImGui::ColorEdit3("Color", &sr.color.x);
+
+                    // Texture UI
+                    const char* texLabel = (sr.texture ? "Texture: (set)" : "Texture: <None>");
+                    ImGui::TextUnformatted(texLabel);
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton("Clear Texture")) {
+                        sr.texture.reset();
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton("Browse...")) {
+                        ImGui::OpenPopup("pick_tex_popup");
+                    }
+
+                    // Popup with simple assets browser
+                    DrawTexturePicker(sr, "pick_tex_popup");
+
+                    ImGui::PopID();
                 }
             }
         }
+
         ImGui::End();
     }
 }

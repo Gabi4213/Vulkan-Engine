@@ -72,6 +72,13 @@ namespace lavander {
         }
 
         template<typename T>
+        bool removeComponentAt(Entity entity, size_t index) 
+        {
+            return getStorage<T>().removeAt(entity, index);
+        }
+
+
+        template<typename T>
         std::unordered_map<Entity, std::vector<T>>& getAllComponentsOfType() 
         {
             return getStorage<T>().getAll();

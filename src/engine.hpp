@@ -13,6 +13,7 @@
 #include <vector>
 
 #include <glm/gtc/matrix_transform.hpp>
+#include "component_type_db_init.hpp"
 #include <chrono>
 
 
@@ -41,6 +42,10 @@ namespace lavander {
         ECSRegistry& getRegistry() { return registry; }
 
         SceneGraph sceneGraph{ &registry };
+        VkDescriptorSetLayout getMaterialSetLayout() const { return materialSetLayout; }
+        VkDescriptorPool      getMaterialDescriptorPool() const { return materialPool; }
+
+        c_device& getDevice() { return device; }
 
         private:
         void createPipelineLayout();
@@ -56,6 +61,8 @@ namespace lavander {
 
         void allocateCommandBuffers();
         void recordCommandBuffer(int imageIndex);
+        void createMaterialSetLayout();
+        void Engine::createMaterialDescriptorPool(uint32_t maxSets = 512);
 
         c_window window{WIDTH, HEIGHT, "Engine"};
         c_device device{window};
@@ -68,6 +75,9 @@ namespace lavander {
 
 
         VkDescriptorSetLayout descriptorSetLayout;
+
+        VkDescriptorSetLayout materialSetLayout{};
+        VkDescriptorPool      materialPool{};
 
         VkDescriptorPool descriptorPool;
         std::vector<VkDescriptorSet> descriptorSets;

@@ -13,19 +13,30 @@
 namespace lavander 
 {
 
-    Renderer2D::Renderer2D(c_device& device, VkRenderPass renderPass, VkExtent2D extent, VkPipelineLayout layout): deviceRef(device), pipelineLayout(layout)
+    Renderer2D::Renderer2D(c_device& device,
+        VkRenderPass renderPass,
+        VkExtent2D extent,
+        VkPipelineLayout layout,
+        VkDescriptorSetLayout matLayout,
+        VkDescriptorPool matPool)
+        : deviceRef(device),
+        pipelineLayout(layout),
+        materialSetLayout(matLayout),
+        materialPool(matPool)        // comes from Engine
     {
         createQuadBuffers();
         createPipeline(renderPass, extent);
+        createDefaultTexture();        // uses materialPool + materialSetLayout
     }
 
     void Renderer2D::createQuadBuffers()
     {
-        std::vector<Vertex> vertices = {
-            {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}}, // bottom left
-            {{ 0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}}, // bottom right
-            {{ 0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}}, // top right
-            {{-0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}}, // top left
+        std::vector<Vertex> vertices = 
+        {
+            {{-0.5f,-0.5f},{1,0,0},{0,0}}, //bottom-left
+            {{ 0.5f,-0.5f},{0,1,0},{1,0}}, //bottom-right
+            {{ 0.5f, 0.5f},{0,0,1},{1,1}}, //top-right
+            {{-0.5f, 0.5f},{1,1,1},{0,1}}, //top-left
         };
 
         std::vector<uint32_t> indices = {
@@ -34,6 +45,13 @@ namespace lavander
         };
 
         quadBuffers = std::make_unique<c_buffers>(deviceRef, vertices, indices);
+    }
+
+    void Renderer2D::createDefaultTexture()
+    {
+        defaultWhite = std::make_shared<Texture2D>(deviceRef, 255, 255, 255, 255);
+        // allocate once, cache inside Texture2D
+        defaultWhite->allocateDescriptor(materialPool, materialSetLayout);
     }
 
     void Renderer2D::createPipeline(VkRenderPass renderPass, VkExtent2D extent)
@@ -56,32 +74,52 @@ namespace lavander
         pipeline->bind(cmd);
         quadBuffers->bind(cmd);
 
-        auto& sprites = registry.getAllComponentsOfType<SpriteRenderer>();
-        for (auto& [entity, spriteList] : sprites)
+        auto& spritesByEntity = registry.getAllComponentsOfType<SpriteRenderer>();
+        for (auto& [entity, spriteList] : spritesByEntity)
         {
-            auto* transformList = registry.getComponents<Transform>(entity);
-            if (!transformList) continue;
+            auto* transforms = registry.getComponents<Transform>(entity);
+            if (!transforms) continue;
 
-            for (auto& t : *transformList)
+            for (auto& sprite : spriteList)
             {
-                for (auto& sprite : spriteList)
+                // Choose descriptor set: default white, or sprite's texture
+                VkDescriptorSet matSet = defaultWhite->descriptorSet();
+                if (sprite.texture)
                 {
-                    glm::mat4 model = glm::mat4(1.0f);
+                    // Allocate once if needed, then reuse cached set
+                    if (sprite.texture->descriptorSet() == VK_NULL_HANDLE)
+                        sprite.texture->allocateDescriptor(materialPool, materialSetLayout);
 
-                    //trasnsform
+                    matSet = sprite.texture->descriptorSet();
+                }
+
+                // Bind material set at set = 1
+                vkCmdBindDescriptorSets(
+                    cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                    pipelineLayout, /*firstSet*/ 1, 1, &matSet,
+                    0, nullptr
+                );
+
+                // Draw for each transform on this entity (supports multi-Transform)
+                for (auto& t : *transforms)
+                {
+                    glm::mat4 model(1.0f);
                     model = glm::translate(model, t.position);
-
-                    //rotation
-                    model = glm::rotate(model, t.rotation.z, glm::vec3(0, 0, 1));
-                    model = glm::rotate(model, t.rotation.y, glm::vec3(0, 1, 0));
-                    model = glm::rotate(model, t.rotation.x, glm::vec3(1, 0, 0));
-
-                    //scale
+                    model = model
+                        * glm::rotate(glm::mat4(1.0f), t.rotation.z, glm::vec3(0, 0, 1))
+                        * glm::rotate(glm::mat4(1.0f), t.rotation.y, glm::vec3(0, 1, 0))
+                        * glm::rotate(glm::mat4(1.0f), t.rotation.x, glm::vec3(1, 0, 0));
                     model = glm::scale(model, t.scale);
 
-                    PushConst pc{ model, glm::vec4(sprite.color, 1.0f) };
+                    PushConst pc{};
+                    pc.model = model;
+                    pc.color = glm::vec4(sprite.color, 1.0f);
 
-                    vkCmdPushConstants(cmd, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConst), &pc);
+                    vkCmdPushConstants(
+                        cmd, pipelineLayout,
+                        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                        0, sizeof(PushConst), &pc
+                    );
 
                     quadBuffers->draw(cmd);
                 }

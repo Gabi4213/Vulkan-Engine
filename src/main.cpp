@@ -15,15 +15,21 @@ int main()
         auto e = reg.createEntity();
         auto e2 = reg.createEntity();
 
-        reg.addComponent<Transform>(e, 
+        reg.addComponent<lavander::Transform>(e,
             {
                 glm::vec3(0.0f,0.0f,0.0f),
                 glm::vec3(0.0f, glm::radians(0.0f), 0.0f),
                 glm::vec3(0.5f, 0.5f, 0.5f)          
             
             });
+        
+        auto tex = std::make_shared<lavander::Texture2D>(engine.getDevice(), "../../src/assets/default_texture.png");
 
-        reg.addComponent<SpriteRenderer>(e, { glm::vec3(1.0f, 0.0f, 0.0f) });
+        tex->allocateDescriptor(engine.getMaterialDescriptorPool(), engine.getMaterialSetLayout());
+
+        reg.addComponent<lavander::SpriteRenderer>(e, { glm::vec3(1.0f), tex });
+
+        //reg.addComponent<lavander::SpriteRenderer>(e, { glm::vec3(1.0f, 0.0f, 0.0f) });
 
         engine.run();
 

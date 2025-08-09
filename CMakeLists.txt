@@ -25,6 +25,10 @@ add_subdirectory(third_party/glm EXCLUDE_FROM_ALL)
 #imgui
 set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/imgui)
 
+#stb
+set(STB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb)
+
+
 file(GLOB IMGUI_CORE_SOURCES
     ${IMGUI_DIR}/*.cpp
 )
@@ -75,6 +79,7 @@ target_include_directories(VulkanEngine PRIVATE
     third_party/vulkan_headers/include
     third_party/glm
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${STB_DIR}  
 )
 
 # link libraries

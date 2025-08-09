@@ -22,6 +22,18 @@ namespace lavander
             return it != storage.end() ? &it->second : nullptr;
         }
 
+        bool removeAt(Entity entity, size_t index)
+        {
+            auto it = storage.find(entity);
+            if (it == storage.end()) return false;
+            auto& vec = it->second;
+            if (index >= vec.size()) return false;
+            vec.erase(vec.begin() + static_cast<long>(index));
+            if (vec.empty()) storage.erase(it);
+            return true;
+        }
+
+
         void removeComponent(Entity entity)
         {
             storage.erase(entity);
