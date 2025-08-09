@@ -1,20 +1,55 @@
+// ecs_registry.hpp
 #pragma once
 #include "component_storage.hpp"
+#include <vector>
+#include <unordered_set>
+#include <algorithm>
 
-namespace lavander
-{
-    class ECSRegistry
-    {
+namespace lavander {
+
+    class ECSRegistry {
     public:
-
         Entity createEntity()
         {
-            return nextEntityId++;
+            Entity e = nextEntityId++;
+            entities.push_back(e);
+            alive.insert(e);
+            return e;
+        }
+
+        //registers external id's / ensure it's in the list
+        void ensureAlive(Entity e) 
+        {
+            if (!isAlive(e)) {
+                entities.push_back(e);
+                alive.insert(e);
+            }
+        }
+
+        bool isAlive(Entity e) const 
+        { 
+            return alive.count(e) != 0;
+        }
+
+        void destroyEntity(Entity e)
+        {
+            if (!isAlive(e)) return;
+            alive.erase(e);
+            entities.erase(std::remove(entities.begin(), entities.end(), e), entities.end());
+            // NOTE: components are NOT removed automatically here.
+            // You can call removeAllComponents<T>(e) for the types you use,
+            // or add a type-erased storage system later.
+        }
+
+        const std::vector<Entity>& getAllEntities() const
+        { 
+            return entities; 
         }
 
         template<typename T>
-        void addComponent(Entity entity, const T& component)
+        void addComponent(Entity entity, const T& component) 
         {
+            ensureAlive(entity);
             getStorage<T>().add(entity, component);
         }
 
@@ -36,16 +71,16 @@ namespace lavander
             getStorage<T>().removeAll(entity);
         }
 
-
         template<typename T>
-        std::unordered_map<Entity, std::vector<T>>& getAllComponentsOfType()
+        std::unordered_map<Entity, std::vector<T>>& getAllComponentsOfType() 
         {
             return getStorage<T>().getAll();
         }
 
     private:
-
         Entity nextEntityId = 1;
+        std::vector<Entity> entities;
+        std::unordered_set<Entity> alive;
 
         template<typename T>
         ComponentStorage<T>& getStorage() 

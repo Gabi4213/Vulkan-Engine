@@ -19,13 +19,14 @@ int main()
             {
                 glm::vec3(0.0f,0.0f,0.0f),
                 glm::vec3(0.0f, glm::radians(0.0f), 0.0f),
-                glm::vec3(0.5f, 0.5f, 0.5f)
+                glm::vec3(0.5f, 0.5f, 0.5f)          
             
             });
 
         reg.addComponent<SpriteRenderer>(e, { glm::vec3(1.0f, 0.0f, 0.0f) });
 
         engine.run();
+
 
         ////query components
         //auto& positions = registry.getAllComponentsOfType<Transform>();

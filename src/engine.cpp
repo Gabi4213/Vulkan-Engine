@@ -344,7 +344,4 @@ namespace lavander {
             throw std::runtime_error("failed to record command buffer!");
         }
     }
-
-
-
 }
