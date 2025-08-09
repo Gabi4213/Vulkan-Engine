@@ -25,6 +25,8 @@ namespace lavander {
 
         void createWindowSurface(VkInstance instance, VkSurfaceKHR *surface);
 
+        GLFWwindow* getGLFWwindow() const { return window; }
+
         private:
         void initWindow();
 

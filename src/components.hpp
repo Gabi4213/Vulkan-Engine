@@ -1,6 +1,7 @@
 // components.hpp
 #pragma once
 #include <glm/glm.hpp>
+#include <string>
 
 struct Transform
 {

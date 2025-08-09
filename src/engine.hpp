@@ -7,6 +7,7 @@
 #include "buffers.hpp"
 #include "ecs_registry.hpp"
 #include "renderer_2d.hpp"
+#include "scene_graph.hpp"
 
 #include <memory>
 #include <vector>
@@ -15,13 +16,19 @@
 #include <chrono>
 
 
+#include <imgui.h>
+#include <backends/imgui_impl_glfw.h>
+#include <backends/imgui_impl_vulkan.h>
+
+
+
 namespace lavander {
 
     class Engine 
     {
         public:
-        static constexpr int WIDTH = 800;
-        static constexpr int HEIGHT = 600;
+        static constexpr int WIDTH = 1280;
+        static constexpr int HEIGHT = 720;
         
         Engine();
         ~Engine();
@@ -32,6 +39,8 @@ namespace lavander {
         void run();
 
         ECSRegistry& getRegistry() { return registry; }
+
+        SceneGraph sceneGraph{ &registry };
 
         private:
         void createPipelineLayout();
@@ -68,6 +77,14 @@ namespace lavander {
 
         ECSRegistry registry;
         std::unique_ptr<Renderer2D> renderer2D;
+        
+
+        VkDescriptorPool imguiPool = VK_NULL_HANDLE;
+
+        void createImGuiDescriptorPool();
+        void initImGui();
+        void shutdownImGui();
+        void uploadImGuiFonts();
 
     };
 }

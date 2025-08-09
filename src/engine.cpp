@@ -22,14 +22,17 @@ namespace lavander {
             pipelineLayout
         );
 
+        createImGuiDescriptorPool();
+
+        initImGui();
 
         initBuffers();
         allocateCommandBuffers();
-       //createCommandBuffers();
     }
 
     Engine::~Engine()
     {
+        shutdownImGui();
         vkDestroyPipelineLayout(device.device(), pipelineLayout, nullptr);
         vkDestroyDescriptorSetLayout(device.device(), descriptorSetLayout, nullptr);
     }
@@ -167,6 +170,18 @@ namespace lavander {
             throw std::runtime_error("imageIndex failed to acquire swap chain image!");
         }
 
+        // Start ImGui frame
+        ImGui_ImplVulkan_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        // Your editor UI
+        sceneGraph.OnImGuiRender();
+        // (Optional) ImGui::ShowDemoWindow();
+
+        ImGui::Render(); // finalize ImGui draw data for this frame
+
+
        // updateUniformBuffer(imageIndex);
         recordCommandBuffer(imageIndex);
 
@@ -264,8 +279,6 @@ namespace lavander {
             vkUpdateDescriptorSets(device.device(), 1, &descriptorWrite, 0, nullptr);
         }
 
-
-
     }
     void Engine::updateUniformBuffer(uint32_t currentImage)
     {
@@ -312,12 +325,12 @@ namespace lavander {
     void Engine::recordCommandBuffer(int idx) {
         auto cmd = commandBuffers[idx];
 
-        // reset & begin
+        //reset and begin
         vkResetCommandBuffer(cmd, 0);
         VkCommandBufferBeginInfo beginInfo{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
         vkBeginCommandBuffer(cmd, &beginInfo);
 
-        // begin render pass
+        //begin render pass
         VkRenderPassBeginInfo rpInfo{ VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
         rpInfo.renderPass = swapChain.getRenderPass();
         rpInfo.framebuffer = swapChain.getFrameBuffer(idx);
@@ -329,19 +342,116 @@ namespace lavander {
         rpInfo.pClearValues = clears.data();
         vkCmdBeginRenderPass(cmd, &rpInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-        // bind the *default* pipeline for UBO (if you still need it)
+        //bind the default pipeline for UBO
         pipeline->bind(cmd);
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
             pipelineLayout, 0, 1,
             descriptorSets.data() + idx, 0, nullptr);
 
-        // now draw your ECS quads
+        //quad
         renderer2D->draw(cmd, registry);
 
-        // end
+        //imgui draw
+        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+
+        //end
         vkCmdEndRenderPass(cmd);
         if (vkEndCommandBuffer(cmd) != VK_SUCCESS) {
             throw std::runtime_error("failed to record command buffer!");
         }
+    }
+    void Engine::createImGuiDescriptorPool()
+    {
+        //general purpose pool for imgui
+        std::array<VkDescriptorPoolSize, 11> pool_sizes = {
+            VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+            VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+            VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+            VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+            VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+            VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+            VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+            VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+            VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+            VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+            VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 },
+        };
+
+        VkDescriptorPoolCreateInfo pool_info{ };
+        pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+        pool_info.maxSets = 1000 * (uint32_t)pool_sizes.size();
+        pool_info.poolSizeCount = (uint32_t)pool_sizes.size();
+        pool_info.pPoolSizes = pool_sizes.data();
+
+        if (vkCreateDescriptorPool(device.device(), &pool_info, nullptr, &imguiPool) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create ImGui descriptor pool");
+        }
+    }
+
+    static void CheckVk(VkResult err) 
+    {
+        if (err == VK_SUCCESS) return;
+        throw std::runtime_error("ImGui/Vulkan error: " + std::to_string(err));
+    }
+
+    void Engine::initImGui()
+    {
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImGui::StyleColorsDark();
+
+
+        //GLFW backend
+        ImGui_ImplGlfw_InitForVulkan(window.getGLFWwindow(), true);
+
+        //vulkan backend
+        ImGui_ImplVulkan_InitInfo init_info{};
+        init_info.Instance = device.getInstance();              // expose from c_device if needed
+        init_info.PhysicalDevice = device.getPhysicalDevice();  // expose from c_device if needed
+        init_info.Device = device.device();
+        init_info.QueueFamily = device.findPhysicalQueueFamilies().graphicsFamily;
+        init_info.Queue = device.graphicsQueue();
+        init_info.DescriptorPool = imguiPool;
+        init_info.MinImageCount = std::max<uint32_t>(2, swapChain.imageCount());
+        init_info.ImageCount = swapChain.imageCount();
+        init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+        init_info.CheckVkResultFn = CheckVk;
+
+        init_info.RenderPass = swapChain.getRenderPass();
+
+
+        //imgui expects to manually load vulkan function pointers before the init, so here we do that if no prototypes is set
+#if defined(IMGUI_IMPL_VULKAN_NO_PROTOTYPES) || defined(VK_NO_PROTOTYPES)
+        ImGui_ImplVulkan_LoadFunctions(
+            VK_API_VERSION_1_0,
+            [](const char* name, void* user_data) -> PFN_vkVoidFunction {
+                VkInstance inst = (VkInstance)user_data;
+                return vkGetInstanceProcAddr(inst, name);
+            },
+            device.getInstance() 
+        );
+#endif
+
+        ImGui_ImplVulkan_Init(&init_info);
+
+        uploadImGuiFonts();
+    }
+
+    void Engine::shutdownImGui()
+    {
+        ImGui_ImplVulkan_Shutdown();
+        ImGui_ImplGlfw_Shutdown();
+        ImGui::DestroyContext();
+        if (imguiPool) {
+            vkDestroyDescriptorPool(device.device(), imguiPool, nullptr);
+            imguiPool = VK_NULL_HANDLE;
+        }
+    }
+
+    void Engine::uploadImGuiFonts()
+    {
+        VkCommandBuffer cmd = device.beginSingleTimeCommands();
+        device.endSingleTimeCommands(cmd);
     }
 }
