@@ -18,6 +18,7 @@
 
 
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_vulkan.h>
 
@@ -64,6 +65,7 @@ namespace lavander {
         void createMaterialSetLayout();
         void Engine::createMaterialDescriptorPool(uint32_t maxSets = 512);
 
+
         c_window window{WIDTH, HEIGHT, "Engine"};
         c_device device{window};
         c_swapchain swapChain{device, window.getExtent()};
@@ -93,6 +95,7 @@ namespace lavander {
 
         void createImGuiDescriptorPool();
         void initImGui();
+        void BeginMainDockspace();
         void shutdownImGui();
         void uploadImGuiFonts();
 

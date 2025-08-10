@@ -23,6 +23,7 @@ namespace lavander
     private:
         std::string MakeEntityLabel(Entity e);
         void DrawTexturePicker(SpriteRenderer& sr, const char* popupId);
+        void BeginMainDockspace();
 
         ECSRegistry* m_Registry = nullptr;
         Entity       m_Selected = 0; // 0 = invalid for us

@@ -187,17 +187,16 @@ namespace lavander {
             throw std::runtime_error("imageIndex failed to acquire swap chain image!");
         }
 
-        // Start ImGui frame
+        //start ImGui frame
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        // Your editor UI
+        //ui editor
+        BeginMainDockspace();
         sceneGraph.OnImGuiRender();
-        // (Optional) ImGui::ShowDemoWindow();
 
         ImGui::Render(); // finalize ImGui draw data for this frame
-
 
         updateUniformBuffer(imageIndex);
         recordCommandBuffer(imageIndex);
@@ -442,6 +441,11 @@ namespace lavander {
         ImGui::CreateContext();
         ImGui::StyleColorsDark();
 
+        //enable docking
+        ImGuiIO& io = ImGui::GetIO();
+        io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+        //optional - multi viewports for OS level floating windows
+        // io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
         //GLFW backend
         ImGui_ImplGlfw_InitForVulkan(window.getGLFWwindow(), true);
@@ -477,6 +481,94 @@ namespace lavander {
         ImGui_ImplVulkan_Init(&init_info);
 
         uploadImGuiFonts();
+    }
+
+    void Engine::BeginMainDockspace()
+    {
+        ImGuiWindowFlags window_flags =
+            ImGuiWindowFlags_MenuBar |
+            ImGuiWindowFlags_NoDocking |
+            ImGuiWindowFlags_NoTitleBar |
+            ImGuiWindowFlags_NoCollapse |
+            ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoMove |
+            ImGuiWindowFlags_NoBringToFrontOnFocus |
+            ImGuiWindowFlags_NoNavFocus;
+
+        ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_PassthruCentralNode; // nice: central area is transparent
+
+        const ImGuiViewport* vp = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(vp->WorkPos);
+        ImGui::SetNextWindowSize(vp->WorkSize);
+        ImGui::SetNextWindowViewport(vp->ID);
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+
+        ImGui::Begin("MainDockSpace", nullptr, window_flags);
+        ImGui::PopStyleVar(3);
+
+        //top bar
+        if (ImGui::BeginMenuBar())
+        {
+            if (ImGui::BeginMenu("File"))
+            {
+                if (ImGui::MenuItem("New Scene")) { /* TODO */ }
+                if (ImGui::MenuItem("Open...", "Ctrl+O")) { /* TODO */ }
+                if (ImGui::MenuItem("Save", "Ctrl+S")) { /* TODO */ }
+                ImGui::Separator();
+                if (ImGui::MenuItem("Exit")) { glfwSetWindowShouldClose(window.getGLFWwindow(), 1); }
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Edit"))
+            {
+                ImGui::MenuItem("Undo", "Ctrl+Z", false, false);
+                ImGui::MenuItem("Redo", "Ctrl+Y", false, false);
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("View"))
+            {
+                if (ImGui::MenuItem("Reset Layout")) { ImGui::DockBuilderRemoveNode(ImGui::GetID("MyMainDockSpace")); } // optional
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Help"))
+            {
+                ImGui::MenuItem("About", nullptr, false, true);
+                ImGui::EndMenu();
+            }
+            ImGui::EndMenuBar();
+        }
+
+        //dockspace
+        ImGuiID dockspace_id = ImGui::GetID("MyMainDockSpace");
+        ImGui::DockSpace(dockspace_id, ImVec2(0, 0), dockspace_flags);
+
+        //default layout
+        static bool first_time = true;
+        if (first_time)
+        {
+            first_time = false;
+            ImGui::DockBuilderRemoveNode(dockspace_id);
+            ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace | ImGuiDockNodeFlags_PassthruCentralNode);
+            ImGui::DockBuilderSetNodeSize(dockspace_id, vp->WorkSize);
+
+            ImGuiID dock_main_id = dockspace_id;
+            ImGuiID dock_left, dock_right;
+            //left - 20%
+            ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Left, 0.20f, &dock_left, &dock_main_id);
+
+            //right - 25%
+            ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.25f, &dock_right, &dock_main_id);
+
+            //ensure to make the name the same as the window otherwise things fails
+            ImGui::DockBuilderDockWindow("Scene", dock_left);
+            ImGui::DockBuilderDockWindow("Properties", dock_right);
+
+            ImGui::DockBuilderFinish(dockspace_id);
+        }
+
+        ImGui::End();
     }
 
     void Engine::shutdownImGui()
