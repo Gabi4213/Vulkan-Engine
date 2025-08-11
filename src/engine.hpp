@@ -18,14 +18,16 @@
 
 
 #include <imgui.h>
+#include <ImGuizmo.h>
 #include <imgui_internal.h>
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_vulkan.h>
 
+#include "scene_view_panel.hpp"
+#include "scene_render_target.hpp"
 
-
-namespace lavander {
-
+namespace lavander 
+{
     class Engine 
     {
         public:
@@ -43,10 +45,14 @@ namespace lavander {
         ECSRegistry& getRegistry() { return registry; }
 
         SceneGraph sceneGraph{ &registry };
+        SceneViewPanel sceneView;
+        SceneRenderTarget sceneRT;
         VkDescriptorSetLayout getMaterialSetLayout() const { return materialSetLayout; }
         VkDescriptorPool      getMaterialDescriptorPool() const { return materialPool; }
 
         c_device& getDevice() { return device; }
+
+        void setSceneViewport(float w, float h) { sceneViewW = w; sceneViewH = h; }
 
         private:
         void createPipelineLayout();
@@ -75,7 +81,6 @@ namespace lavander {
 
         std::unique_ptr<c_buffers> buffers;
 
-
         VkDescriptorSetLayout descriptorSetLayout;
 
         VkDescriptorSetLayout materialSetLayout{};
@@ -93,11 +98,13 @@ namespace lavander {
 
         VkDescriptorPool imguiPool = VK_NULL_HANDLE;
 
+        float sceneViewW = 0.0f;
+        float sceneViewH = 0.0f;
+
         void createImGuiDescriptorPool();
         void initImGui();
         void BeginMainDockspace();
         void shutdownImGui();
         void uploadImGuiFonts();
-
     };
 }

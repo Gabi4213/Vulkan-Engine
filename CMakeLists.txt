@@ -54,8 +54,20 @@ target_link_libraries(imgui PUBLIC
     vulkan     # for imgui_impl_vulkan
 )
 
-# Prevent ImGui Vulkan backend from loading its own prototypes
-target_compile_definitions(imgui PUBLIC IMGUI_IMPL_VULKAN_NO_PROTOTYPES)
+
+
+# Link ImGuizmo
+set(IMGUIZMO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/imguizmo)
+
+file(GLOB IMGUIZMO_SOURCES
+    ${IMGUIZMO_DIR}/*.cpp
+)
+
+add_library(imguizmo STATIC ${IMGUIZMO_SOURCES})
+target_include_directories(imguizmo PUBLIC
+    ${IMGUIZMO_DIR}
+    ${IMGUI_DIR}
+)
 
 
 # get files like shaders, headers and cpps
@@ -87,6 +99,7 @@ target_link_libraries(VulkanEngine PRIVATE
     vulkan
     glfw
 	imgui
+    imguizmo
 )
 
 # mark shader as resource

@@ -4,7 +4,8 @@
 #include <stdexcept>
 #include <array>
 
-namespace lavander {
+namespace lavander 
+{
 
     Engine::Engine()
     {
@@ -29,13 +30,10 @@ namespace lavander {
         sceneGraph.SetTextureLoader(
             [this](const std::string& path) -> std::shared_ptr<Texture2D> {
                 auto tex = std::make_shared<Texture2D>(device, path);
-                // allocate (or ensure) a descriptor set for this texture so Renderer2D can bind set=1 safely
-                // If you added a caching getter, prefer that:
-                // tex->getOrCreateDescriptor(materialPool, materialSetLayout);
-                tex->allocateDescriptor(materialPool, materialSetLayout); // if you don't have caching yet
+                tex->allocateDescriptor(materialPool, materialSetLayout);
                 return tex;
             },
-            "../../src/assets" // root; change if your assets folder path differs
+            "../../src/assets"
         );
 
 
@@ -44,6 +42,12 @@ namespace lavander {
         createImGuiDescriptorPool();
 
         initImGui();
+
+        auto fmt = swapChain.getSwapChainImageFormat();
+        sceneRT.create(device.device(), device.getPhysicalDevice(),
+            swapChain.getSwapChainExtent(), fmt, nullptr);
+        sceneView.SetSceneTexture(sceneRT.imguiTexId());
+
 
         initBuffers();
         allocateCommandBuffers();
@@ -146,9 +150,6 @@ namespace lavander {
 
             vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[i], 0, nullptr);
 
-            //buffers->bind(commandBuffers[i]);
-            //buffers->draw(commandBuffers[i]);
-
             renderer2D->draw(commandBuffers[i], registry);
 
             vkCmdEndRenderPass(commandBuffers[i]);
@@ -191,11 +192,18 @@ namespace lavander {
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
+        ImGuizmo::BeginFrame();
+
 
         //ui editor
         BeginMainDockspace();
+        sceneView.OnImGuiRender();
         sceneGraph.OnImGuiRender();
 
+        ImVec2 vp = sceneGraph.getSceneViewportSize();
+        if (vp.x > 0 && vp.y > 0) setSceneViewport(vp.x, vp.y);
+
+        sceneView.SetSceneTexture(sceneRT.imguiTexId());
         ImGui::Render(); // finalize ImGui draw data for this frame
 
         updateUniformBuffer(imageIndex);
@@ -206,7 +214,6 @@ namespace lavander {
         {
             throw std::runtime_error("result failed to acquire swap chain image!");
         }
-
     }
 
     void Engine::createDescriptorSetLayout()
@@ -259,7 +266,8 @@ namespace lavander {
         poolInfo.pPoolSizes = &poolSize;
         poolInfo.maxSets = static_cast<uint32_t>(swapChain.imageCount());
 
-        if (vkCreateDescriptorPool(device.device(), &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
+        if (vkCreateDescriptorPool(device.device(), &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS)
+        {
             throw std::runtime_error("failed to create descriptor pool!");
         }
     }
@@ -273,11 +281,13 @@ namespace lavander {
         allocInfo.pSetLayouts = layouts.data();
 
         descriptorSets.resize(swapChain.imageCount());
-        if (vkAllocateDescriptorSets(device.device(), &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
+        if (vkAllocateDescriptorSets(device.device(), &allocInfo, descriptorSets.data()) != VK_SUCCESS)
+        {
             throw std::runtime_error("failed to allocate descriptor sets!");
         }
 
-        for (size_t i = 0; i < swapChain.imageCount(); i++) {
+        for (size_t i = 0; i < swapChain.imageCount(); i++)
+        {
             VkDescriptorBufferInfo bufferInfo{};
             bufferInfo.buffer = uniformBuffers[i];
             bufferInfo.offset = 0;
@@ -303,8 +313,8 @@ namespace lavander {
         ubo.model = glm::mat4(1.0f);
         ubo.view = glm::mat4(1.0f);
 
-        float w = static_cast<float>(swapChain.getSwapChainExtent().width);
-        float h = static_cast<float>(swapChain.getSwapChainExtent().height);
+        float w = sceneViewW * 2.7;
+        float h = sceneViewH;
         float aspect = w / h;
 
         ubo.proj = glm::ortho(-aspect, aspect, -1.0f, 1.0f);
@@ -326,48 +336,55 @@ namespace lavander {
         allocInfo.commandPool = device.getCommandPool();
         allocInfo.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
 
-        if (vkAllocateCommandBuffers(device.device(), &allocInfo, commandBuffers.data()) != VK_SUCCESS) {
+        if (vkAllocateCommandBuffers(device.device(), &allocInfo, commandBuffers.data()) != VK_SUCCESS)
+        {
             throw std::runtime_error("failed to allocate command buffers!");
         }
     }
 
     void Engine::recordCommandBuffer(int idx) {
         auto cmd = commandBuffers[idx];
-
-        //reset and begin
         vkResetCommandBuffer(cmd, 0);
         VkCommandBufferBeginInfo beginInfo{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
         vkBeginCommandBuffer(cmd, &beginInfo);
 
-        //begin render pass
-        VkRenderPassBeginInfo rpInfo{ VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
-        rpInfo.renderPass = swapChain.getRenderPass();
-        rpInfo.framebuffer = swapChain.getFrameBuffer(idx);
-        rpInfo.renderArea = { {0,0}, swapChain.getSwapChainExtent() };
+        //offscreen pass
+        VkClearValue sceneClear{};
+        sceneClear.color = { 0.1f, 0.1f, 0.12f, 1.0f };
+        VkRenderPassBeginInfo rpScene{ VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
+        rpScene.renderPass = sceneRT.renderPass();
+        rpScene.framebuffer = sceneRT.framebuffer();
+        rpScene.renderArea.offset = { 0,0 };
+        rpScene.renderArea.extent = sceneRT.extent();
+        rpScene.clearValueCount = 1;
+        rpScene.pClearValues = &sceneClear;
+        vkCmdBeginRenderPass(cmd, &rpScene, VK_SUBPASS_CONTENTS_INLINE);
+
+        pipeline->bind(cmd);
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, descriptorSets.data() + idx, 0, nullptr);
+
+        renderer2D->draw(cmd, registry);
+
+        vkCmdEndRenderPass(cmd);
+
+        //swapchain pass for imgui only
+        VkRenderPassBeginInfo rpMain{ VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
+        rpMain.renderPass = swapChain.getRenderPass();
+        rpMain.framebuffer = swapChain.getFrameBuffer(idx);
+        rpMain.renderArea = { {0,0}, swapChain.getSwapChainExtent() };
+
         std::array<VkClearValue, 2> clears{};
         clears[0].color = { 0.2f,0.5f,0.9f,1.0f };
         clears[1].depthStencil = { 1.0f,0 };
-        rpInfo.clearValueCount = (uint32_t)clears.size();
-        rpInfo.pClearValues = clears.data();
-        vkCmdBeginRenderPass(cmd, &rpInfo, VK_SUBPASS_CONTENTS_INLINE);
+        rpMain.clearValueCount = (uint32_t)clears.size();
+        rpMain.pClearValues = clears.data();
 
-        //bind the default pipeline for UBO
-        pipeline->bind(cmd);
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-            pipelineLayout, 0, 1,
-            descriptorSets.data() + idx, 0, nullptr);
+        vkCmdBeginRenderPass(cmd, &rpMain, VK_SUBPASS_CONTENTS_INLINE);
 
-        //quad
-        renderer2D->draw(cmd, registry);
-
-        //imgui draw
         ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
 
-        //end
         vkCmdEndRenderPass(cmd);
-        if (vkEndCommandBuffer(cmd) != VK_SUCCESS) {
-            throw std::runtime_error("failed to record command buffer!");
-        }
+        vkEndCommandBuffer(cmd);
     }
 
     void Engine::createMaterialSetLayout()
@@ -382,7 +399,9 @@ namespace lavander {
         info.bindingCount = 1;
         info.pBindings = &sampler;
         if (vkCreateDescriptorSetLayout(device.device(), &info, nullptr, &materialSetLayout) != VK_SUCCESS)
+        {
             throw std::runtime_error("failed to create material set layout");
+        }
     }
 
     void Engine::createMaterialDescriptorPool(uint32_t maxSets)
@@ -397,13 +416,16 @@ namespace lavander {
         ci.maxSets = maxSets;
 
         if (vkCreateDescriptorPool(device.device(), &ci, nullptr, &materialPool) != VK_SUCCESS)
+        {
             throw std::runtime_error("failed to create material descriptor pool");
+        }
     }
 
     void Engine::createImGuiDescriptorPool()
     {
         //general purpose pool for imgui
-        std::array<VkDescriptorPoolSize, 11> pool_sizes = {
+        std::array<VkDescriptorPoolSize, 11> pool_sizes =
+        {
             VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
             VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
             VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
@@ -424,7 +446,8 @@ namespace lavander {
         pool_info.poolSizeCount = (uint32_t)pool_sizes.size();
         pool_info.pPoolSizes = pool_sizes.data();
 
-        if (vkCreateDescriptorPool(device.device(), &pool_info, nullptr, &imguiPool) != VK_SUCCESS) {
+        if (vkCreateDescriptorPool(device.device(), &pool_info, nullptr, &imguiPool) != VK_SUCCESS)
+        {
             throw std::runtime_error("Failed to create ImGui descriptor pool");
         }
     }
@@ -432,7 +455,9 @@ namespace lavander {
     static void CheckVk(VkResult err) 
     {
         if (err == VK_SUCCESS) return;
-        throw std::runtime_error("ImGui/Vulkan error: " + std::to_string(err));
+        {
+            throw std::runtime_error("ImGui/Vulkan error: " + std::to_string(err));
+        }
     }
 
     void Engine::initImGui()
@@ -495,7 +520,7 @@ namespace lavander {
             ImGuiWindowFlags_NoBringToFrontOnFocus |
             ImGuiWindowFlags_NoNavFocus;
 
-        ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_PassthruCentralNode; // nice: central area is transparent
+        ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_PassthruCentralNode;
 
         const ImGuiViewport* vp = ImGui::GetMainViewport();
         ImGui::SetNextWindowPos(vp->WorkPos);
@@ -576,7 +601,8 @@ namespace lavander {
         ImGui_ImplVulkan_Shutdown();
         ImGui_ImplGlfw_Shutdown();
         ImGui::DestroyContext();
-        if (imguiPool) {
+        if (imguiPool) 
+        {
             vkDestroyDescriptorPool(device.device(), imguiPool, nullptr);
             imguiPool = VK_NULL_HANDLE;
         }
