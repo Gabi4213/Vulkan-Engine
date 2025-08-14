@@ -5,7 +5,6 @@
 #include "buffers.hpp"
 #include "ecs_registry.hpp"
 #include "texture2d.hpp"
-
 #include <memory>
 
 namespace lavander
@@ -17,7 +16,7 @@ namespace lavander
         void draw(VkCommandBuffer cmd, ECSRegistry& registry);
 
     private:
-        c_device& deviceRef; // store device
+        c_device& deviceRef;
         VkPipelineLayout        pipelineLayout;
         std::unique_ptr<c_pipeline> pipeline;
         std::unique_ptr<c_buffers> quadBuffers;

@@ -17,7 +17,6 @@ namespace lavander
         createMaterialDescriptorPool();
         createMaterialSetLayout();
 
-
         createPipelineLayout();
         createPipeline();
 
@@ -25,7 +24,6 @@ namespace lavander
             device, swapChain.getRenderPass(), swapChain.getSwapChainExtent(),
             pipelineLayout, materialSetLayout, materialPool
         );
-
 
         sceneGraph.SetTextureLoader(
             [this](const std::string& path) -> std::shared_ptr<Texture2D> {
@@ -180,6 +178,13 @@ namespace lavander
 
     void Engine::drawFrame()
     {
+        //delta time
+        static double last = glfwGetTime();
+        double now = glfwGetTime();
+        float dt = float(now - last);
+        last = now;
+
+
         uint32_t imageIndex;
         auto result = swapChain.acquireNextImage(&imageIndex);
 
@@ -194,11 +199,22 @@ namespace lavander
         ImGui::NewFrame();
         ImGuizmo::BeginFrame();
 
-
         //ui editor
         BeginMainDockspace();
+
+
+        float swapAspect = swapChain.getSwapChainExtent().width / (float)swapChain.getSwapChainExtent().height;
+        sceneView.setSceneAspect(swapAspect);
+
+
         sceneView.OnImGuiRender();
         sceneGraph.OnImGuiRender();
+
+        //camera
+        if (sceneView.isHovered())
+        {
+            sceneView.camera().update(window.getGLFWwindow(), dt);
+        }
 
         ImVec2 vp = sceneGraph.getSceneViewportSize();
         if (vp.x > 0 && vp.y > 0) setSceneViewport(vp.x, vp.y);
@@ -310,15 +326,18 @@ namespace lavander
     void Engine::updateUniformBuffer(uint32_t currentImage)
     {
         UniformBufferObject ubo{};
-        ubo.model = glm::mat4(1.0f);
-        ubo.view = glm::mat4(1.0f);
-
-        float w = sceneViewW * 2.7;
-        float h = sceneViewH;
-        float aspect = w / h;
-
-        ubo.proj = glm::ortho(-aspect, aspect, -1.0f, 1.0f);
+        auto& cam = sceneView.camera();
+        ubo.view = cam.getView();
+        ubo.proj = cam.getProj();
         ubo.proj[1][1] *= -1.0f;
+        ubo.model = glm::mat4(1.0f);
+
+       // float w = sceneViewW * 2.7;
+       // float h = sceneViewH;
+       // float aspect = w / h;
+
+      //  ubo.proj = glm::ortho(-aspect, aspect, -1.0f, 1.0f);
+       // ubo.proj[1][1] *= -1.0f;
 
         void* data = nullptr;
         vkMapMemory(device.device(), uniformBuffersMemory[currentImage], 0, sizeof(ubo), 0, &data);
@@ -554,7 +573,7 @@ namespace lavander
             }
             if (ImGui::BeginMenu("View"))
             {
-                if (ImGui::MenuItem("Reset Layout")) { ImGui::DockBuilderRemoveNode(ImGui::GetID("MyMainDockSpace")); } // optional
+                if (ImGui::MenuItem("Reset Layout")) { ImGui::DockBuilderRemoveNode(ImGui::GetID("MainDockSpace")); }
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("Help"))
@@ -566,7 +585,7 @@ namespace lavander
         }
 
         //dockspace
-        ImGuiID dockspace_id = ImGui::GetID("MyMainDockSpace");
+        ImGuiID dockspace_id = ImGui::GetID("MainDockSpace");
         ImGui::DockSpace(dockspace_id, ImVec2(0, 0), dockspace_flags);
 
         //default layout

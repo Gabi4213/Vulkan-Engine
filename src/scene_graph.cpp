@@ -112,7 +112,7 @@ namespace lavander
     void SceneGraph::OnImGuiRender()
     {
         //scene hierarchy
-        ImGui::Begin("Scene");
+        ImGui::Begin("Hierarchy###SceneHierarchy");
 
         ImVec2 avail = ImGui::GetContentRegionAvail();
         if (avail.x > 0.0f && avail.y > 0.0f)
