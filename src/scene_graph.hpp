@@ -12,17 +12,17 @@ namespace lavander
     class SceneGraph 
     {
     public:
-        explicit SceneGraph(ECSRegistry* registry) : m_Registry(registry) {}
+        explicit SceneGraph(ECSRegistry* inRegistry) : registry(inRegistry) {}
 
         void OnImGuiRender();
 
-        Entity GetSelected() const { return m_Selected; }
-        void   SetSelected(Entity e) { m_Selected = e; }
+        Entity GetSelected() const { return selected; }
+        void   SetSelected(Entity e) { selected = e; } 
 
         using TextureLoader = std::function<std::shared_ptr<Texture2D>(const std::string& path)>;
         void SetTextureLoader(TextureLoader loader, const std::string& assetRoot = "assets");
 
-        ImVec2 getSceneViewportSize() const { return sceneViewportSize_; }
+        ImVec2 getSceneViewportSize() const { return sceneViewportSize; }
 
     private:
 
@@ -30,14 +30,14 @@ namespace lavander
         void DrawTexturePicker(SpriteRenderer& sr, const char* popupId);
         void BeginMainDockspace();
 
-        ECSRegistry* m_Registry = nullptr;
-        Entity       m_Selected = 0; // 0 = invalid
+        ECSRegistry* registry = nullptr;
+        Entity       selected = 0; // 0 = invalid
 
 
-        TextureLoader m_LoadTexture;
-        std::filesystem::path m_AssetRoot = "assets";
-        std::filesystem::path m_BrowseDir = m_AssetRoot;
+        TextureLoader loadTexture;
+        std::filesystem::path assetRoot = "assets";
+        std::filesystem::path browseDir = assetRoot;
         
-        ImVec2 sceneViewportSize_{ 0,0 };
+        ImVec2 sceneViewportSize { 0,0 };
     };
 }

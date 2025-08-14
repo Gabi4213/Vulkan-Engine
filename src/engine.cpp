@@ -207,6 +207,7 @@ namespace lavander
         sceneView.setSceneAspect(swapAspect);
 
 
+        sceneView.SetContext(&registry, sceneGraph.GetSelected());
         sceneView.OnImGuiRender();
         sceneGraph.OnImGuiRender();
 
