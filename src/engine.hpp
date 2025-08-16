@@ -7,6 +7,7 @@
 #include "buffers.hpp"
 #include "ecs_registry.hpp"
 #include "renderer_2d.hpp"
+#include "renderer_3d.hpp"
 #include "scene_graph.hpp"
 
 #include <memory>
@@ -15,7 +16,6 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include "component_type_db_init.hpp"
 #include <chrono>
-
 
 #include <imgui.h>
 #include <ImGuizmo.h>
@@ -94,6 +94,7 @@ namespace lavander
 
         ECSRegistry registry;
         std::unique_ptr<Renderer2D> renderer2D;
+        std::unique_ptr<Renderer3D> renderer3D;
         
 
         VkDescriptorPool imguiPool = VK_NULL_HANDLE;

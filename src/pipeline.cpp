@@ -6,14 +6,15 @@
 #include <iostream>
 #include <cassert>
 
-namespace lavander {
+namespace lavander
+{
 
     c_pipeline::c_pipeline(
-            c_device &device, 
-            const std::string& vertFilepath, 
-            const std::string& fragFilepath, 
-            const PipelineConfigInfo& configInfo):
-            device{device}
+        c_device& device,
+        const std::string& vertFilepath,
+        const std::string& fragFilepath,
+        const PipelineConfigInfo& configInfo) :
+        device{ device }
     {
         createGraphicsPipeline(vertFilepath, fragFilepath, configInfo);
     }
@@ -27,7 +28,7 @@ namespace lavander {
 
     std::vector<char> c_pipeline::readFile(const std::string& filepath)
     {
-        std::ifstream file{filepath, std::ios::ate | std::ios::binary};
+        std::ifstream file{ filepath, std::ios::ate | std::ios::binary };
 
         if (!file.is_open())
         {
@@ -45,89 +46,66 @@ namespace lavander {
     }
 
     void c_pipeline::createGraphicsPipeline(
-        const std::string& vertFilepath, 
-        const std::string& fragFilepath, 
-        const PipelineConfigInfo& configInfo)
+        const std::string& vertFilepath,
+        const std::string& fragFilepath,
+        const PipelineConfigInfo& cfg)
     {
-        assert(configInfo.pipelineLayout != VK_NULL_HANDLE &&
-        "Cannot create graphics pipeline:: no pipelineLayout provided in configInfo");
-        assert(configInfo.renderPass != VK_NULL_HANDLE &&
-        "Cannot create graphics pipeline:: no pipelineLayout provided in configInfo");
+        assert(cfg.pipelineLayout != VK_NULL_HANDLE && "Cannot create graphics pipeline: no pipelineLayout");
+        assert(cfg.renderPass != VK_NULL_HANDLE && "Cannot create graphics pipeline: no renderPass");
+
         auto vertCode = readFile(vertFilepath);
         auto fragCode = readFile(fragFilepath);
 
         createShaderModule(vertCode, &vertShaderModule);
         createShaderModule(fragCode, &fragShaderModule);
 
-        VkPipelineShaderStageCreateInfo shaderStages[2];
+        VkPipelineShaderStageCreateInfo shaderStages[2]{};
         shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
         shaderStages[0].module = vertShaderModule;
         shaderStages[0].pName = "main";
-        shaderStages[0].flags = 0;
-        shaderStages[0].pNext = nullptr;
-        shaderStages[0].pSpecializationInfo = nullptr;
 
         shaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         shaderStages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
         shaderStages[1].module = fragShaderModule;
         shaderStages[1].pName = "main";
-        shaderStages[1].flags = 0;
-        shaderStages[1].pNext = nullptr;
-        shaderStages[1].pSpecializationInfo = nullptr;
 
-        auto bindingDescription = Vertex::getBindingDescription();
-        auto attributeDescriptions = Vertex::getAttributeDescriptions();
+        //vertex input
+        VkPipelineVertexInputStateCreateInfo vertexInputInfo = cfg.vertexInputInfo;
+        vertexInputInfo.vertexBindingDescriptionCount = static_cast<uint32_t>(cfg.bindingDescriptions.size());
+        vertexInputInfo.pVertexBindingDescriptions = cfg.bindingDescriptions.data();
+        vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(cfg.attributeDescriptions.size());
+        vertexInputInfo.pVertexAttributeDescriptions = cfg.attributeDescriptions.data();
 
-        VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
-        vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-        vertexInputInfo.vertexBindingDescriptionCount = 1;
-        vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-        vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-        vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
-
-
+        //viewport and scissor
         VkPipelineViewportStateCreateInfo viewportInfo{};
         viewportInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
         viewportInfo.viewportCount = 1;
-        viewportInfo.pViewports = &configInfo.viewport;
+        viewportInfo.pViewports = &cfg.viewport;
         viewportInfo.scissorCount = 1;
-        viewportInfo.pScissors = &configInfo.scissor;
+        viewportInfo.pScissors = &cfg.scissor;
 
         VkGraphicsPipelineCreateInfo pipelineInfo{};
         pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
         pipelineInfo.stageCount = 2;
         pipelineInfo.pStages = shaderStages;
         pipelineInfo.pVertexInputState = &vertexInputInfo;
-        pipelineInfo.pInputAssemblyState = &configInfo.inputAssemblyInfo;
+        pipelineInfo.pInputAssemblyState = &cfg.inputAssemblyInfo;
         pipelineInfo.pViewportState = &viewportInfo;
-        pipelineInfo.pRasterizationState = &configInfo.rasterizationInfo;
-        pipelineInfo.pMultisampleState = &configInfo.multisampleInfo;
-
-        pipelineInfo.pColorBlendState = &configInfo.colorBlendInfo;
-        pipelineInfo.pDepthStencilState = &configInfo.depthStencilInfo;
+        pipelineInfo.pRasterizationState = &cfg.rasterizationInfo;
+        pipelineInfo.pMultisampleState = &cfg.multisampleInfo;
+        pipelineInfo.pColorBlendState = &cfg.colorBlendInfo;
+        pipelineInfo.pDepthStencilState = &cfg.depthStencilInfo;
         pipelineInfo.pDynamicState = nullptr;
-
-        pipelineInfo.layout = configInfo.pipelineLayout;
-        pipelineInfo.renderPass = configInfo.renderPass;
-        pipelineInfo.subpass = configInfo.subpass;
-
-        pipelineInfo.basePipelineIndex = -1;
+        pipelineInfo.layout = cfg.pipelineLayout;
+        pipelineInfo.renderPass = cfg.renderPass;
+        pipelineInfo.subpass = cfg.subpass;
         pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+        pipelineInfo.basePipelineIndex = -1;
 
-
-
-
-
-        if (vkCreateGraphicsPipelines(
-            device.device(), 
-            VK_NULL_HANDLE, 
-            1, 
-            &pipelineInfo, 
-            nullptr, 
-            &graphicsPipeline) != VK_SUCCESS)
-            {
-                throw std::runtime_error("failed to create graphics pipeline");
+        if (vkCreateGraphicsPipelines(device.device(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS)
+        {
+            throw std::runtime_error("failed to create graphics pipeline");
         }
     }
 
@@ -151,87 +129,60 @@ namespace lavander {
 
     PipelineConfigInfo c_pipeline::defaultPipelineConfigInfo(uint32_t width, uint32_t height)
     {
-        PipelineConfigInfo configInfo{};
+        PipelineConfigInfo cfg{};
 
-        configInfo.inputAssemblyInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-        configInfo.inputAssemblyInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-        configInfo.inputAssemblyInfo.primitiveRestartEnable = VK_FALSE;
+        //input assembly
+        cfg.inputAssemblyInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+        cfg.inputAssemblyInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        cfg.inputAssemblyInfo.primitiveRestartEnable = VK_FALSE;
 
-        configInfo.viewport.x = 0.0f;
-        configInfo.viewport.y = 0.0f;
-        configInfo.viewport.width = static_cast<float>(width);
-        configInfo.viewport.height = static_cast<float>(height);
-        configInfo.viewport.minDepth = 0.0f;
-        configInfo.viewport.maxDepth = 1.0f;
+        //viewport and scissor
+        cfg.viewport.x = 0.0f;
+        cfg.viewport.y = 0.0f;
+        cfg.viewport.width = static_cast<float>(width);
+        cfg.viewport.height = static_cast<float>(height);
+        cfg.viewport.minDepth = 0.0f;
+        cfg.viewport.maxDepth = 1.0f;
 
-        configInfo.scissor.offset = {0, 0};
-        configInfo.scissor.extent = {width, height};
+        cfg.scissor.offset = { 0, 0 };
+        cfg.scissor.extent = { width, height };
 
-        configInfo.rasterizationInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-        configInfo.rasterizationInfo.depthClampEnable = VK_FALSE;
-        configInfo.rasterizationInfo.rasterizerDiscardEnable = VK_FALSE;
-        configInfo.rasterizationInfo.polygonMode = VK_POLYGON_MODE_FILL;
-        configInfo.rasterizationInfo.lineWidth = 1.0f;
-        configInfo.rasterizationInfo.cullMode = VK_CULL_MODE_NONE;
-        configInfo.rasterizationInfo.frontFace = VK_FRONT_FACE_CLOCKWISE;
-        configInfo.rasterizationInfo.depthBiasEnable = VK_FALSE;
-        configInfo.rasterizationInfo.depthBiasConstantFactor = 0.0f;  // Optional
-        configInfo.rasterizationInfo.depthBiasClamp = 0.0f;           // Optional
-        configInfo.rasterizationInfo.depthBiasSlopeFactor = 0.0f;     // Optional
+        //rasterizer
+        cfg.rasterizationInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+        cfg.rasterizationInfo.depthClampEnable = VK_FALSE;
+        cfg.rasterizationInfo.rasterizerDiscardEnable = VK_FALSE;
+        cfg.rasterizationInfo.polygonMode = VK_POLYGON_MODE_FILL;
+        cfg.rasterizationInfo.lineWidth = 1.0f;
+        cfg.rasterizationInfo.cullMode = VK_CULL_MODE_NONE;
+        cfg.rasterizationInfo.frontFace = VK_FRONT_FACE_CLOCKWISE;
 
-        configInfo.multisampleInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-        configInfo.multisampleInfo.sampleShadingEnable = VK_FALSE;
-        configInfo.multisampleInfo.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-        configInfo.multisampleInfo.minSampleShading = 1.0f;           // Optional
-        configInfo.multisampleInfo.pSampleMask = nullptr;             // Optional
-        configInfo.multisampleInfo.alphaToCoverageEnable = VK_FALSE;  // Optional
-        configInfo.multisampleInfo.alphaToOneEnable = VK_FALSE;       // Optional
+        //multisampling
+        cfg.multisampleInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+        cfg.multisampleInfo.sampleShadingEnable = VK_FALSE;
+        cfg.multisampleInfo.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
-        configInfo.colorBlendAttachment.colorWriteMask =
-            VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
-            VK_COLOR_COMPONENT_A_BIT;
-        configInfo.colorBlendAttachment.blendEnable = VK_FALSE;
-        configInfo.colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;   // Optional
-        configInfo.colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;  // Optional
-        configInfo.colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;              // Optional
-        configInfo.colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;   // Optional
-        configInfo.colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;  // Optional
-        configInfo.colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;              // Optional
+        //color blend
+        cfg.colorBlendAttachment.colorWriteMask =
+            VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+        cfg.colorBlendAttachment.blendEnable = VK_FALSE;
 
-        configInfo.colorBlendInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-        configInfo.colorBlendInfo.logicOpEnable = VK_FALSE;
-        configInfo.colorBlendInfo.logicOp = VK_LOGIC_OP_COPY;  // Optional
-        configInfo.colorBlendInfo.attachmentCount = 1;
-        //configInfo.colorBlendInfo.pAttachments = &configInfo.colorBlendAttachment;
-        configInfo.colorBlendInfo.blendConstants[0] = 0.0f;  // Optional
-        configInfo.colorBlendInfo.blendConstants[1] = 0.0f;  // Optional
-        configInfo.colorBlendInfo.blendConstants[2] = 0.0f;  // Optional
-        configInfo.colorBlendInfo.blendConstants[3] = 0.0f;  // Optional
+        cfg.colorBlendInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+        cfg.colorBlendInfo.logicOpEnable = VK_FALSE;
+        cfg.colorBlendInfo.attachmentCount = 1;
+        cfg.colorBlendInfo.pAttachments = &cfg.colorBlendAttachment; // set it here for convenience
 
-        configInfo.depthStencilInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-        configInfo.depthStencilInfo.depthTestEnable = VK_TRUE;
-        configInfo.depthStencilInfo.depthWriteEnable = VK_TRUE;
-        configInfo.depthStencilInfo.depthCompareOp = VK_COMPARE_OP_LESS;
-        configInfo.depthStencilInfo.depthBoundsTestEnable = VK_FALSE;
-        configInfo.depthStencilInfo.minDepthBounds = 0.0f;  // Optional
-        configInfo.depthStencilInfo.maxDepthBounds = 1.0f;  // Optional
-        configInfo.depthStencilInfo.stencilTestEnable = VK_FALSE;
-        configInfo.depthStencilInfo.front = {};  // Optional
-        configInfo.depthStencilInfo.back = {};   // Optional
+        //depth stencil
+        cfg.depthStencilInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+        cfg.depthStencilInfo.depthTestEnable = VK_TRUE;
+        cfg.depthStencilInfo.depthWriteEnable = VK_TRUE;
+        cfg.depthStencilInfo.depthCompareOp = VK_COMPARE_OP_LESS;
+        cfg.depthStencilInfo.depthBoundsTestEnable = VK_FALSE;
+        cfg.depthStencilInfo.stencilTestEnable = VK_FALSE;
 
-        VkDescriptorSetLayoutBinding uboLayoutBinding{};
-        uboLayoutBinding.binding = 0;
-        uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        uboLayoutBinding.descriptorCount = 1;
-        uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-        uboLayoutBinding.pImmutableSamplers = nullptr;
+        //cull and new stufdf for 3d renderinfg
+        cfg.rasterizationInfo.cullMode = VK_CULL_MODE_NONE;
+        cfg.vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 
-        VkDescriptorSetLayoutCreateInfo layoutInfo{};
-        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        layoutInfo.bindingCount = 1;
-        layoutInfo.pBindings = &uboLayoutBinding;
-        return configInfo;
+        return cfg;
     }
-
-
 }

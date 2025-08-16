@@ -47,6 +47,28 @@ namespace lavander
         }
     };
 
+    struct Vertex3D {
+        glm::vec3 pos;
+        glm::vec3 normal;
+        glm::vec2 uv;
+
+        static VkVertexInputBindingDescription getBindingDescription() {
+            VkVertexInputBindingDescription binding{};
+            binding.binding = 0;
+            binding.stride = sizeof(Vertex3D);
+            binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+            return binding;
+        }
+        static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions() {
+            std::array<VkVertexInputAttributeDescription, 3> attrs{};
+            attrs[0] = { 0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex3D, pos) };
+            attrs[1] = { 1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex3D, normal) };
+            attrs[2] = { 2, 0, VK_FORMAT_R32G32_SFLOAT,    offsetof(Vertex3D, uv) };
+            return attrs;
+        }
+    };
+
+
     struct UniformBufferObject 
     {
         glm::mat4 model;

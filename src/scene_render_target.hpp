@@ -34,9 +34,17 @@ namespace lavander
         VkFramebuffer  framebuffer_ = VK_NULL_HANDLE;
         ImTextureID    imguiTexId_ = 0;
 
+        VkImage depthImage_{};
+        VkDeviceMemory depthMem_{};
+        VkImageView depthView_{};
+        VkFormat depthFormat_ = VK_FORMAT_UNDEFINED;
+
         void createImage(VkFormat format);
         void createViewAndSampler(VkFormat format);
         void createRenderPass(VkFormat format);
         void createFramebuffer();
+
+        VkFormat pickDepthFormat() const;
+        void createDepthImageAndView();
     };
 } 

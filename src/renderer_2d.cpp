@@ -61,6 +61,12 @@ namespace lavander
         config.pipelineLayout = pipelineLayout;
         config.colorBlendInfo.pAttachments = &config.colorBlendAttachment;
 
+        // vertex layout
+        auto bind = Vertex::getBindingDescription();
+        auto attrs = Vertex::getAttributeDescriptions();
+        config.bindingDescriptions = { bind };
+        config.attributeDescriptions = { attrs.begin(), attrs.end() };
+
         pipeline = std::make_unique<c_pipeline>(
             deviceRef,
             "../../src/shaders/quad_shader.vert.spv",

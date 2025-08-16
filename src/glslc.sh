@@ -4,3 +4,5 @@ $VULKAN_SDK/bin/glslc shaders/default_shader.vert -o shaders/default_shader.vert
 $VULKAN_SDK/bin/glslc shaders/default_shader.frag -o shaders/default_shader.frag.spv
 $VULKAN_SDK/bin/glslc shaders/quad_shader.vert -o shaders/quad_shader.vert.spv
 $VULKAN_SDK/bin/glslc shaders/quad_shader.frag -o shaders/quad_shader.frag.spv
+$VULKAN_SDK/bin/glslc shaders/mesh.vert -o shaders/mesh.vert.spv
+$VULKAN_SDK/bin/glslc shaders/mesh.frag -o shaders/mesh.frag.spv

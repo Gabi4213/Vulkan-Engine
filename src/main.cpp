@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <stdexcept>
+#include "mesh.hpp"
 
 int main()
 {
@@ -13,7 +14,6 @@ int main()
     {
         auto& reg = engine.getRegistry();
         auto e = reg.createEntity();
-        auto e2 = reg.createEntity();
 
         reg.addComponent<lavander::Transform>(e,
             {
@@ -29,7 +29,12 @@ int main()
 
         reg.addComponent<lavander::SpriteRenderer>(e, { glm::vec3(1.0f), tex });
 
-        //reg.addComponent<lavander::SpriteRenderer>(e, { glm::vec3(1.0f, 0.0f, 0.0f) });
+        auto cubeMesh = lavander::Mesh::MakeCube(engine.getDevice());
+        auto e2 = reg.createEntity();
+        reg.addComponent<lavander::MeshFilter>(e2, { cubeMesh });
+        reg.addComponent<lavander::MeshRenderer3D>(e2, { nullptr, glm::vec3(1.0f,0.0f,0.0f) });
+        reg.addComponent<lavander::Transform>(e2, {{0,0,-2}, {0,0,0},{1,1,1} });
+
 
         engine.run();
 

@@ -3,7 +3,7 @@
 #include <glm/glm.hpp>
 #include "texture2d.hpp"
 #include <string>
-#include <memory>
+#include "mesh.hpp"
 
 namespace lavander
 {
@@ -23,6 +23,16 @@ namespace lavander
     {
         glm::vec3 color = glm::vec3(1.0f);
         std::shared_ptr<Texture2D> texture;
+    };
+    
+    struct MeshFilter 
+    {
+        std::shared_ptr<Mesh> mesh;
+    };
+
+    struct MeshRenderer3D {
+        std::shared_ptr<Texture2D> texture;
+        glm::vec3 color{ 1,1,1 };
     };
 
     struct PushConst

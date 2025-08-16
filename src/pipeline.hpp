@@ -23,6 +23,10 @@ namespace lavander {
         VkRenderPass renderPass = nullptr;
         uint32_t subpass = 0;
         VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
+        VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+        std::vector<VkVertexInputAttributeDescription> attributeDescriptions{};
+        std::vector<VkVertexInputBindingDescription>   bindingDescriptions{};
+
     };
 
     class c_pipeline {
@@ -50,8 +54,6 @@ namespace lavander {
 
         void createShaderModule(const std::vector<char>& code, VkShaderModule* shaderModule);
 
-
-        // implicitly will outlive any class that depends on it. "aggregation"
         c_device& device;
         VkPipeline graphicsPipeline;
         VkShaderModule vertShaderModule;
